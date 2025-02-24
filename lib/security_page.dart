@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:kiosk_mode/kiosk_mode.dart';
 import 'package:exam_spenda165/home_page.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:flutter/services.dart';
+import 'dart:io';
 
 class SecurityPage extends StatefulWidget {
   @override
@@ -9,14 +11,19 @@ class SecurityPage extends StatefulWidget {
 }
 
 class _SecurityPageState extends State<SecurityPage> {
+  static const platform = MethodChannel('com.example.exam_spenda165/alarm');
   bool isKioskEnabled = false;
   bool isAppPinned = false;
+  bool hasFloatingApp = false;
+  bool isInternetConnected = false;
   int failedAttempts = 0;
 
   @override
   void initState() {
     super.initState();
     _watchKioskMode();
+    _checkFloatingApps();
+    _checkInternetConnection();
   }
 
   void _watchKioskMode() {
@@ -33,41 +40,47 @@ class _SecurityPageState extends State<SecurityPage> {
     });
   }
 
-  void _triggerAlarm() {
-   FlutterRingtonePlayer().play(
-  android: AndroidSounds.notification,
-  ios: IosSounds.glass,
-  looping: false, // Android only - API >= 28
-  volume: 100, // Android only - API >= 28
-  asAlarm: false, // Android only - all APIs
-);
+  Future<void> _checkFloatingApps() async {
+    try {
+      final bool isOverlayEnabled = await platform.invokeMethod('isOverlayEnabled');
+      setState(() {
+        hasFloatingApp = isOverlayEnabled;
+      });
+      if (isOverlayEnabled) {
+        _triggerAlarm();
+      }
+    } on PlatformException catch (e) {
+      print("Failed to check overlay: '\${e.message}'.");
+    }
   }
 
-  void _promptExitKiosk() async {
-    String? password = await showDialog(
-      context: context,
-      builder: (context) => PasswordDialog(),
-    );
-
-    if (password == 'spenda165admin') {
-      await stopKioskMode();
+  Future<void> _checkInternetConnection() async {
+    try {
+      final result = await InternetAddress.lookup('google.com');
       setState(() {
-        isKioskEnabled = false;
-        isAppPinned = false;
+        isInternetConnected = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
       });
-      Navigator.pop(context);
-    } else {
-      failedAttempts++;
-      if (failedAttempts >= 3) {
-        _triggerAlarm();
-        await Future.delayed(Duration(minutes: 1));
-        failedAttempts = 0;
-      }
+    } on SocketException catch (_) {
+      setState(() {
+        isInternetConnected = false;
+      });
+      _triggerAlarm();
     }
+  }
+
+  void _triggerAlarm() {
+    FlutterRingtonePlayer().play(
+      android: AndroidSounds.notification,
+      ios: IosSounds.glass,
+      looping: false,
+      volume: 100,
+      asAlarm: false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    bool securityPassed = isAppPinned && !hasFloatingApp && isInternetConnected;
     return WillPopScope(
       onWillPop: () async {
         _triggerAlarm();
@@ -78,10 +91,14 @@ class _SecurityPageState extends State<SecurityPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(isAppPinned ? 'Aplikasi sudah terpin' : 'Aplikasi belum terpin'),
+              Text(isAppPinned ? 'Aplikasi sudah dipin' : 'Aplikasi belum dipin'),
+              SizedBox(height: 10),
+              Text(hasFloatingApp ? 'Terdeteksi aplikasi mengambang' : 'Tidak ada aplikasi mengambang'),
+              SizedBox(height: 10),
+              Text(isInternetConnected ? 'Internet aktif' : 'Internet tidak aktif'),
               SizedBox(height: 20),
               ElevatedButton(
-                onPressed: isAppPinned
+                onPressed: securityPassed
                     ? () {
                         Navigator.push(
                           context,
@@ -89,42 +106,12 @@ class _SecurityPageState extends State<SecurityPage> {
                         );
                       }
                     : null,
-                child: Text('Masuk ke Halaman Ujian'),
-              ),
-              SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _promptExitKiosk,
-                child: Text('Keluar dari Mode Kiosk'),
+                child: Text('Masuk ke Halaman Utama'),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class PasswordDialog extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    TextEditingController _passwordController = TextEditingController();
-    return AlertDialog(
-      title: Text('Masukkan Sandi'),
-      content: TextField(
-        controller: _passwordController,
-        obscureText: true,
-        decoration: InputDecoration(hintText: 'Sandi'),
-      ),
-      actions: [
-        TextButton(
-          child: Text('Batal'),
-          onPressed: () => Navigator.pop(context),
-        ),
-        TextButton(
-          child: Text('OK'),
-          onPressed: () => Navigator.pop(context, _passwordController.text),
-        ),
-      ],
     );
   }
 }
