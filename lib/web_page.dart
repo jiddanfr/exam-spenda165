@@ -6,6 +6,7 @@ import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:async';
+import 'package:intl/intl.dart';
 import 'package:kiosk_mode/kiosk_mode.dart';
 
 class WebPage extends StatefulWidget {
@@ -15,6 +16,38 @@ class WebPage extends StatefulWidget {
 
   @override
   _WebPageState createState() => _WebPageState();
+}
+class PasswordDialog extends StatefulWidget {
+  @override
+  _PasswordDialogState createState() => _PasswordDialogState();
+}
+
+class _PasswordDialogState extends State<PasswordDialog> {
+  final TextEditingController _passwordController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Masukkan Password'),
+      content: TextField(
+        controller: _passwordController,
+        obscureText: true,
+        decoration: InputDecoration(labelText: 'Password'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Batal'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop(_passwordController.text);
+          },
+          child: Text('OK'),
+        ),
+      ],
+    );
+  }
 }
 
 class _WebPageState extends State<WebPage> {
@@ -26,21 +59,20 @@ class _WebPageState extends State<WebPage> {
   final Battery _battery = Battery();
   String _batteryLevel = 'Unknown';
   String _connectionStatus = 'Unknown';
+  String _currentTime = '';
   late Timer _timer;
 
   @override
   void initState() {
     super.initState();
     _checkViolations();
-    _getBatteryStatus();
-    _getConnectionStatus();
+    _updateStatus();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..loadRequest(Uri.parse(widget.url));
 
     _timer = Timer.periodic(Duration(seconds: 5), (timer) {
-      _getBatteryStatus();
-      _getConnectionStatus();
+      _updateStatus();
       _checkLowBattery();
     });
   }
@@ -51,21 +83,19 @@ class _WebPageState extends State<WebPage> {
     super.dispose();
   }
 
-  Future<void> _getBatteryStatus() async {
+  Future<void> _updateStatus() async {
     final batteryLevel = await _battery.batteryLevel;
+    var connectivityResult = await (Connectivity().checkConnectivity());
+    String formattedTime = DateFormat('HH:mm').format(DateTime.now());
+
     setState(() {
       _batteryLevel = '$batteryLevel%';
-    });
-  }
-
-  Future<void> _getConnectionStatus() async {
-    var connectivityResult = await (Connectivity().checkConnectivity());
-    setState(() {
       _connectionStatus = connectivityResult == ConnectivityResult.mobile
           ? 'Data Seluler'
           : connectivityResult == ConnectivityResult.wifi
               ? 'Wi-Fi'
               : 'Tidak Terhubung';
+      _currentTime = formattedTime;
     });
   }
 
@@ -177,7 +207,7 @@ class _WebPageState extends State<WebPage> {
                     children: [
                       Text('Baterai: $_batteryLevel'),
                       Text('Koneksi: $_connectionStatus'),
-                      Text('Jam: \${TimeOfDay.now().format(context)}'),
+                      Text('Jam: $_currentTime'),
                     ],
                   ),
                 ),
@@ -190,6 +220,12 @@ class _WebPageState extends State<WebPage> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (_isMenuOpen) ...[
+            FloatingActionButton(
+              heroTag: 'settings',
+              onPressed: () {},
+              child: Icon(Icons.settings),
+            ),
+            SizedBox(height: 10),
             FloatingActionButton(
               heroTag: 'status',
               onPressed: _toggleStatusVisibility,
@@ -228,31 +264,6 @@ class _WebPageState extends State<WebPage> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class PasswordDialog extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    TextEditingController _passwordController = TextEditingController();
-    return AlertDialog(
-      title: Text('Masukkan Sandi'),
-      content: TextField(
-        controller: _passwordController,
-        obscureText: true,
-        decoration: InputDecoration(hintText: 'Sandi'),
-      ),
-      actions: [
-        TextButton(
-          child: Text('Batal'),
-          onPressed: () => Navigator.pop(context),
-        ),
-        TextButton(
-          child: Text('OK'),
-          onPressed: () => Navigator.pop(context, _passwordController.text),
-        ),
-      ],
     );
   }
 }

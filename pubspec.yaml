@@ -36,6 +36,8 @@ dependencies:
   kiosk_mode: ^0.6.0
   encrypt: ^5.0.3
   battery_plus: ^6.2.1
+  intl: ^0.20.2
+  provider: ^6.1.2
 
   flutter:
     sdk: flutter

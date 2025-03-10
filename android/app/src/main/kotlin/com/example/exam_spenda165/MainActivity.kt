@@ -2,25 +2,47 @@ package com.example.exam_spenda165
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
 import android.widget.Toast
+import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.example.exam_spenda165/alarm"
+    private val CAMERA_PERMISSION_CODE = 101
+    private var isKioskModeEnabled = false // Status mode kiosk
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.setFlags(
-            android.view.WindowManager.LayoutParams.FLAG_SECURE,
-            android.view.WindowManager.LayoutParams.FLAG_SECURE
-        )
+        checkCameraPermission()
+    }
+
+    private fun checkCameraPermission() {
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.CAMERA), CAMERA_PERMISSION_CODE)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CAMERA_PERMISSION_CODE) {
+            if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                Toast.makeText(this, "Izin kamera diberikan", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Izin kamera ditolak", Toast.LENGTH_SHORT).show()
+                finishAffinity() // Tutup aplikasi jika izin ditolak
+            }
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -34,8 +56,14 @@ class MainActivity : FlutterActivity() {
                 "isOverlayEnabled" -> {
                     result.success(isOverlayEnabled())
                 }
-                "goHome" -> {
-                    goHome()
+                "startKioskMode" -> {
+                    startLockTask() 
+                    isKioskModeEnabled = true
+                    result.success(null)
+                }
+                "stopKioskMode" -> {
+                    stopLockTask() // Keluar dari mode kiosk
+                    isKioskModeEnabled = false
                     result.success(null)
                 }
                 "isInternetConnected" -> {
@@ -62,8 +90,16 @@ class MainActivity : FlutterActivity() {
 
     override fun onPause() {
         super.onPause()
-        // Force close aplikasi saat keluar secara paksa
-        finishAffinity()
+        if (isKioskModeEnabled) {
+            finishAffinity() // Tutup aplikasi jika keluar dari mode kiosk
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isKioskModeEnabled) {
+            finishAffinity() // Pastikan aplikasi benar-benar tertutup
+        }
     }
 
     private fun triggerAlarm() {
@@ -72,10 +108,6 @@ class MainActivity : FlutterActivity() {
 
     private fun isOverlayEnabled(): Boolean {
         return Settings.canDrawOverlays(this)
-    }
-
-    private fun goHome() {
-        moveTaskToBack(true)
     }
 
     private fun isInternetConnected(): Boolean {
