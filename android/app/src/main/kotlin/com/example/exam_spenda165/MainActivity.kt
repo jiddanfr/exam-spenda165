@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -21,6 +22,13 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // ❗ Mencegah screenshot dan preview di recent apps
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
+
         checkCameraPermission()
     }
 
@@ -57,12 +65,12 @@ class MainActivity : FlutterActivity() {
                     result.success(isOverlayEnabled())
                 }
                 "startKioskMode" -> {
-                    startLockTask() 
+                    startLockTask()
                     isKioskModeEnabled = true
                     result.success(null)
                 }
                 "stopKioskMode" -> {
-                    stopLockTask() // Keluar dari mode kiosk
+                    stopLockTask()
                     isKioskModeEnabled = false
                     result.success(null)
                 }
@@ -91,14 +99,14 @@ class MainActivity : FlutterActivity() {
     override fun onPause() {
         super.onPause()
         if (isKioskModeEnabled) {
-            finishAffinity() // Tutup aplikasi jika keluar dari mode kiosk
+            finishAffinity()
         }
     }
 
     override fun onStop() {
         super.onStop()
         if (isKioskModeEnabled) {
-            finishAffinity() // Pastikan aplikasi benar-benar tertutup
+            finishAffinity()
         }
     }
 

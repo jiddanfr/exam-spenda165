@@ -2,14 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:exam_spenda165/security_page.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:kiosk_mode/kiosk_mode.dart';
 import 'package:provider/provider.dart';
 import 'theme_provider.dart';
+import 'network_helper.dart'; // TAMBAHKAN
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inisialisasi pengecekan internet real-time
+  NetworkHelper.initialize();
+
   runApp(ExamSpenda165App());
+
+  // Fullscreen mode
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+  // Prevent screen from sleeping
   WakelockPlus.enable();
 }
 

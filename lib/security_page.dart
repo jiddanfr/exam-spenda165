@@ -1,16 +1,14 @@
-//security_page.dart
 import 'package:flutter/material.dart';
-import 'package:kiosk_mode/kiosk_mode.dart';
 import 'package:exam_spenda165/home_page.dart';
-import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+
 import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-import 'theme_provider.dart';
 
+import 'widgets/app_layout.dart';
+import 'widgets/custom_status_bar.dart';
 
 class SecurityPage extends StatefulWidget {
   @override
@@ -19,67 +17,88 @@ class SecurityPage extends StatefulWidget {
 
 class _SecurityPageState extends State<SecurityPage> {
   static const platform = MethodChannel('com.example.exam_spenda165/alarm');
+
+  final Battery _battery = Battery();
+
   bool hasFloatingApp = false;
   bool isInternetConnected = false;
+
   int batteryLevel = 0;
+
   String networkStatus = "Tidak ada jaringan";
   String currentTime = "";
-  final Battery _battery = Battery();
-  double _fontSize = 16.0;
 
   @override
   void initState() {
     super.initState();
-    _checkFloatingApps();
-    _checkInternetConnection();
-    _getBatteryLevel();
-    _getNetworkStatus();
-    _updateTime();
+    _initializeSecurityChecks();
   }
 
+  /// ------------------------------------------------------------
+  ///  ALL INITIAL SECURITY CHECKS
+  /// ------------------------------------------------------------
+  void _initializeSecurityChecks() {
+    _checkFloatingApps();
+    _checkInternetConnection();
+    _updateBattery();
+    _updateNetworkStatus();
+    _tickClock();
+  }
+
+  /// ------------------------------------------------------------
+  ///  CHECK FLOATING APPS (OVERLAY)
+  /// ------------------------------------------------------------
   Future<void> _checkFloatingApps() async {
     try {
-      final bool isOverlayEnabled = await platform.invokeMethod('isOverlayEnabled');
+      final bool isOverlayEnabled =
+          await platform.invokeMethod('isOverlayEnabled');
+
       setState(() {
         hasFloatingApp = isOverlayEnabled;
       });
-      if (isOverlayEnabled) {
-        _triggerAlarm();
-      }
-    } on PlatformException catch (e) {
-      print("Failed to check overlay: '${e.message}'.");
+    } catch (e) {
+      print("Overlay check error: $e");
     }
   }
 
+  /// ------------------------------------------------------------
+  ///  INTERNET CHECK
+  /// ------------------------------------------------------------
   Future<void> _checkInternetConnection() async {
     try {
-      final result = await InternetAddress.lookup('google.com');
+      final lookup = await InternetAddress.lookup('google.com');
+      final connected = lookup.isNotEmpty && lookup.first.rawAddress.isNotEmpty;
+
       setState(() {
-        isInternetConnected = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-        networkStatus = isInternetConnected ? "Terhubung" : "Tidak ada jaringan";
+        isInternetConnected = connected;
+        networkStatus = connected ? "Terhubung" : "Tidak ada jaringan";
       });
-    } on SocketException catch (_) {
+    } catch (_) {
       setState(() {
         isInternetConnected = false;
         networkStatus = "Tidak ada jaringan";
       });
-      _triggerAlarm();
     }
   }
 
-  Future<void> _getBatteryLevel() async {
+  /// ------------------------------------------------------------
+  ///  BATTERY
+  /// ------------------------------------------------------------
+  Future<void> _updateBattery() async {
     final level = await _battery.batteryLevel;
-    setState(() {
-      batteryLevel = level;
-    });
+    setState(() => batteryLevel = level);
   }
 
-  void _getNetworkStatus() async {
-    List<ConnectivityResult> results = await Connectivity().checkConnectivity();
+  /// ------------------------------------------------------------
+  ///  NETWORK TYPE (WiFi / Mobile)
+  /// ------------------------------------------------------------
+  Future<void> _updateNetworkStatus() async {
+    final result = await Connectivity().checkConnectivity();
+
     setState(() {
-      if (results.contains(ConnectivityResult.mobile)) {
+      if (result.contains(ConnectivityResult.mobile)) {
         networkStatus = "Data Seluler";
-      } else if (results.contains(ConnectivityResult.wifi)) {
+      } else if (result.contains(ConnectivityResult.wifi)) {
         networkStatus = "WiFi";
       } else {
         networkStatus = "Tidak ada jaringan";
@@ -87,107 +106,94 @@ class _SecurityPageState extends State<SecurityPage> {
     });
   }
 
-  void _updateTime() {
+  /// ------------------------------------------------------------
+  /// CLOCK UPDATE
+  /// ------------------------------------------------------------
+  void _tickClock() {
     setState(() {
       currentTime = DateFormat('HH:mm').format(DateTime.now());
     });
-    Future.delayed(Duration(seconds: 1), _updateTime);
+
+    Future.delayed(const Duration(seconds: 1), _tickClock);
   }
 
-  void _triggerAlarm() {
-    FlutterRingtonePlayer().play(fromAsset: "assets/sounds/alarm.mp3");
-  }
-
-  void _goToHomePage() async {
+  /// ------------------------------------------------------------
+  ///  GO TO HOME + ACTIVATE KIOSK MODE
+  /// ------------------------------------------------------------
+  Future<void> _goToHomePage() async {
     await platform.invokeMethod('startKioskMode');
+
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => HomePage()),
+      MaterialPageRoute(builder: (_) => HomePage()),
     );
   }
 
- void _showSettings() {
-  showModalBottomSheet(
-    context: context,
-    builder: (BuildContext context) {
-      return StatefulBuilder(
-        builder: (context, setModalState) {
-          return Container(
-            padding: EdgeInsets.all(16),
+  /// ------------------------------------------------------------
+  ///  UI
+  /// ------------------------------------------------------------
+  @override
+  Widget build(BuildContext context) {
+    return AppLayout(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 20),
+            child: CustomStatusBar(
+              batteryLevel: batteryLevel,
+              networkStatus: networkStatus,
+              currentTime: currentTime,
+            ),
+          ),
+
+          /// IMAGE
+          Expanded(
+            child: Center(
+              child: Image.asset(
+                'assets/images/peraturan.png',
+                width: 700,
+                height: 700,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+
+          /// FOOTER + BUTTON
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
             child: Column(
-              mainAxisSize: MainAxisSize.min, // Menghindari ukuran berlebih
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text("Pengaturan", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ListTile(
-                  dense: true, // Membuat lebih ringkas
-                  contentPadding: EdgeInsets.symmetric(horizontal: 8.0),
-                  leading: Icon(Icons.brightness_6),
-                  title: Text("Mode Gelap"),
-                  trailing: Consumer<ThemeProvider>(
-                    builder: (context, themeProvider, child) => Switch(
-                      value: themeProvider.isDarkMode,
-                      onChanged: (val) {
-                        themeProvider.toggleTheme();
-                        setModalState(() {});
-                      },
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFBB0000),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                  ),
+                  onPressed: (hasFloatingApp || !isInternetConnected)
+                      ? null
+                      : _goToHomePage,
+                  child: const Text(
+                    "START  ",
+                    style: TextStyle(
+                      fontSize: 20,
+                      color: Color(0xFFF7B630),
                     ),
                   ),
                 ),
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 8.0),
-                  leading: Icon(Icons.format_size),
-                  title: Text("Ubah Ukuran Font"),
-                  trailing: SizedBox(
-                    width: 120, // Batasi ukuran slider
-                    child: Slider(
-                      value: _fontSize,
-                      min: 12.0,
-                      max: 24.0,
-                      onChanged: (val) {
-                        setModalState(() {
-                          _fontSize = val;
-                        });
-                      },
-                    ),
+                const SizedBox(height: 10),
+                Text(
+                  '© 2025 SMP Negeri 2 Pandaan Seluruh hak cipta dilindungi. ~JFR',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: Colors.grey[600],
                   ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
-          );
-        },
-      );
-    },
-  );
-}
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("Halaman Keamanan"),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.settings),
-            onPressed: _showSettings,
-          ),
+          )
         ],
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text("Baterai: $batteryLevel%"),
-            Text("Jaringan: $networkStatus"),
-            Text("Waktu: $currentTime"),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: (hasFloatingApp || !isInternetConnected) ? null : _goToHomePage,
-              child: Text("Home"),
-            ),
-          ],
-        ),
       ),
     );
   }
