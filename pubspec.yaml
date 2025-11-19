@@ -9,6 +9,7 @@ environment:
 
 dependencies:
   wakelock_plus: ^1.2.10
+  
   webview_flutter: ^4.10.0
   connectivity_plus: ^6.1.3
   mobile_scanner: ^6.0.6
